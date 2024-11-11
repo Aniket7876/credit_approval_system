@@ -1,0 +1,57 @@
+# docker-compose.yml
+
+version: "3.8" # Optional: Specifies the Docker Compose version. You can omit it as the latest versions ignore this attribute.
+
+services:
+  # Web service to run Django application
+  web:
+    build: # Specifies how to build the container
+      context: . # Context sets the build directory to the root of the project
+      dockerfile: ./Dockerfile # Dockerfile to use for building this service; assumed to be in the project root
+    command: python manage.py runserver 0.0.0.0:8000 # Command to run Django server inside the container
+    volumes:
+      - .:/code # Mounts the project directory to /code in the container, for live code updates
+    ports:
+      - "8000:8000" # Maps port 8000 of the host to port 8000 of the container
+    depends_on:
+      - db # Ensures the database service is started before this service
+
+  # Database service using PostgreSQL
+  db:
+    image: postgres:13 # Specifies the image and version for PostgreSQL
+    environment:
+      POSTGRES_DB: credit_approval # Creates a new PostgreSQL database
+      POSTGRES_USER: postgres # Sets a username for the database
+      POSTGRES_PASSWORD: "ANIKETg.007" # Sets a password for the database
+    volumes:
+      - postgres_data:/var/lib/postgresql/data # Persistent storage for PostgreSQL data
+
+  # Celery worker service for asynchronous task processing
+  celery_worker:
+    build:
+      context: . # Build context set to project root
+      dockerfile: ./Dockerfile # Uses the same Dockerfile as the Django app, with Celery installed in requirements.txt
+    command: celery -A credit_approval_system worker -l info # Command to start Celery worker process
+    depends_on:
+      - db # Ensures the database service is started before this service
+      - redis # Celery requires Redis for message brokering
+
+  # Celery Beat service for periodic tasks (e.g., scheduled tasks)
+  celery_beat:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    command: celery -A credit_approval_system beat -l info # Starts Celery Beat service
+    depends_on:
+      - db
+      - redis
+
+  # Redis service for Celery message broker
+  redis:
+    image: redis:6 # Specifies the Redis image version 6
+    ports:
+      - "6380:6379" # Exposes Redis on port 6379 of the host
+
+volumes:
+  postgres_data: # Declares a named volume for PostgreSQL persistence, stored outside the container
+
